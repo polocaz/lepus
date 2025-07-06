@@ -1,0 +1,9 @@
+set(BPF_PROG cpu_latency_probe)
+add_custom_command(
+  OUTPUT ${BPF_PROG}.o
+  COMMAND clang -O2 -g -Wall -target bpf -D__TARGET_ARCH_x86 -c ${BPF_PROG}.c -o ${BPF_PROG}.o
+  DEPENDS ${BPF_PROG}.c
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+add_custom_target(bpf_objs DEPENDS ${BPF_PROG}.o)
