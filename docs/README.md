@@ -13,7 +13,7 @@ Lepus is a high-performance Linux observability agent that uses **eBPF** to trac
 - ✅ Export metrics via Prometheus (textfile or HTTP)
 - ✅ Zero overhead when idle (no polling)
 - ✅ Ring-buffer–based event streaming to user space
-- ✅ Clean, production-ready C++ daemon
+- ✅ Clean, production-ready C++ daemon with multithreaded design
 - ✅ Configurable thresholds and filters via YAML/TOML
 
 ---
@@ -21,22 +21,38 @@ Lepus is a high-performance Linux observability agent that uses **eBPF** to trac
 ## 📦 Architecture Overview
 
 ```txt
-+------------------+           +------------------------+
-| eBPF Program     |           | Lepus Daemon (C++)     |
-| (sched_switch)   |           |                        |
-|                  |  <--->    |  - Loads eBPF ELF      |
-| - Tracks latency |   Maps    |  - Polls ring buffer   |
-| - Records events |           |  - Exports metrics     |
-+------------------+           +------------------------+
-                                  |
-                             Prometheus / Logs
-````
++-------------------------------+
+| Lepus Daemon (C++)         |
+| -------------------------- |
+| ▸ BpfRunner Thread         | ---> Loads and polls eBPF ring buffer |
+| ▸ MetricsExporter Thread   | ---> Exports metrics to Prometheus    |
+| ▸ ConfigWatcher (optional) | ---> Reloads config on change         |
+| ▸ SignalHandler            | ---> Handles SIGINT/SIGHUP            |
++-------------------------------+
+             |
+             v
+    [ Prometheus textfile or HTTP ]
+```
+
+Each subsystem runs in a dedicated thread for isolation, performance, and testability.
+
+---
+
+## 🧩 Internal Modules
+
+| Module            | Role                                             |
+| ----------------- | ------------------------------------------------ |
+| `BpfRunner`       | Loads BPF object, attaches probes, polls ringbuf |
+| `MetricsExporter` | Periodically flushes events to `.prom` file      |
+| `AgentConfig`     | Loads and validates TOML/YAML config             |
+| `EventDispatcher` | Queues and processes events from BPF             |
+| `SignalHandler`   | Gracefully shuts down all subsystems             |
 
 ---
 
 ## 🚀 Quickstart
 
-> 🛑 Requirements: Linux 5.10+, `clang`, `libbpf`, and `cmake`.
+> 🛑 Requirements: Linux 5.10+, `clang`, `libbpf`, and `cmake`
 
 ```bash
 # Clone
@@ -69,7 +85,10 @@ sudo ./lepus-agent --config ../config/example.toml
 lepus/
 ├── bpf/                # eBPF probe sources (sched, memory, uprobes)
 ├── src/                # Daemon implementation (C++)
-├── include/            # Public headers (AgentConfig, BPFProgram, etc.)
+│   ├── core/           # BpfRunner, MetricsExporter, SignalHandler, etc.
+│   └── main.cpp        # Entry point
+├── include/            # Public headers (AgentConfig, Event structs, etc.)
+├── config/             # TOML/YAML config examples
 ├── tests/              # Unit and integration tests
 ├── packaging/          # RPM, DEB, and systemd unit files
 ├── scripts/            # Build, demo, and install helpers
@@ -94,14 +113,27 @@ path = "/var/lib/lepus/metrics.prom"
 
 ---
 
+## 🛠 Use Cases
+
+- Detect latency spikes in high-performance servers
+- Monitor critical threads for starvation or hangs
+- Collect metrics for Kubernetes observability stacks
+- Debug hard-to-trace off-CPU delays in production workloads
+
+---
+
 ## 🎯 Roadmap
 
-* [x] eBPF CPU latency probe
-* [ ] Thread stall detection
-* [ ] Memory churn analysis (via kmalloc/kfree)
-* [ ] Optional LKM fallback for legacy systems
-* [ ] gRPC telemetry streaming
-* [ ] Grafana dashboard templates
+- ✅ eBPF CPU latency probe (`sched:sched_switch`)
+- 🔄 Modular C++ agent with threading (`BpfRunner`, `MetricsExporter`)
+- 🔜 Threshold-based alerting for hangs/stalls
+- 🔜 Prometheus textfile and embedded HTTP exporter
+- 🔜 Memory churn probe (kmalloc/kfree via tracepoints)
+- 🔜 Optional kernel module fallback for older distros
+- 🔜 Config hot-reloading via `inotify`
+- 🔜 Grafana dashboards + JSON templates
+- 🔜 Packaging: .deb, .rpm, and systemd unit
+- 🔜 gRPC streaming + remote control (optional)
 
 ---
 
@@ -112,7 +144,7 @@ sudo apt install clang llvm libbpf-dev cmake
 make
 ```
 
-See [docs/dev\_guide.md](docs/dev_guide.md) for full instructions.
+See [docs/dev_guide.md](docs/dev_guide.md) for full instructions.
 
 ---
 
@@ -124,19 +156,6 @@ Licensed under the [GPLv2](LICENSE).
 
 ## ✨ Credits
 
-* [libbpf](https://github.com/libbpf/libbpf)
-* [BCC Tools](https://github.com/iovisor/bcc)
-* [Brendan Gregg](http://www.brendangregg.com/) for the inspiration
-
-```
-
----
-
-## 📌 Suggestions
-
-- Update the **repository URL**, your **GitHub name**, and paths
-- Add **badges** for CI status, license, and kernel support if desired
-- Include a **screenshot of a Grafana dashboard** when available
-
-Would you like this written directly into a `docs/README.md` file or do you want to generate a short version for your GitHub summary box too?
-```
+- [libbpf](https://github.com/libbpf/libbpf)
+- [BCC Tools](https://github.com/iovisor/bcc)
+- [Brendan Gregg](http://www.brendangregg.com/) for the inspiration
