@@ -1,13 +1,13 @@
 use aya::{
-    Bpf, include_bytes_aligned,
+    include_bytes_aligned,
     maps::RingBuf,
-    programs::{ProgramError, TracePoint},
-    util::online_cpus,
+    programs::TracePoint,
+    Ebpf,  // Changed from Bpf to Ebpf
 };
-use aya_log::BpfLogger;
-use log::{debug, info, warn};
+use aya_log::EbpfLogger;  // Updated from BpfLogger
+use log::{info, warn};
 use std::convert::TryInto;
-use tokio::{signal, task, time};
+use tokio::{signal, time};
 
 #[repr(C)]
 struct ProcessEvent {
@@ -20,22 +20,22 @@ struct ProcessEvent {
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     env_logger::init();
-
+    
     println!("🦅 Lepus Elite Security Intelligence Platform");
     println!("📡 Starting kernel-level process monitoring...\n");
 
-    // Load the compiled eBPF program
+    // Load the compiled eBPF program - FIX THE PATH
     #[cfg(debug_assertions)]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
-        "../../target/bpfel-unknown-none/debug/process_monitor"
+    let mut bpf = Ebpf::load(include_bytes_aligned!(
+        "../target/bpfel-unknown-none/debug/process_monitor"
     ))?;
     #[cfg(not(debug_assertions))]
-    let mut bpf = Bpf::load(include_bytes_aligned!(
-        "../../target/bpfel-unknown-none/release/process_monitor"
+    let mut bpf = Ebpf::load(include_bytes_aligned!(
+        "../target/bpfel-unknown-none/release/process_monitor"
     ))?;
 
-    // Initialize logging
-    if let Err(e) = BpfLogger::init(&mut bpf) {
+    // Initialize logging - FIXED TYPE
+    if let Err(e) = EbpfLogger::init(&mut bpf) {
         warn!("Failed to initialize eBPF logger: {}", e);
     }
 
@@ -62,21 +62,21 @@ async fn main() -> Result<(), anyhow::Error> {
             _ = async {
                 // Poll for events from kernel
                 if let Some(item) = ring_buf.next() {
-                    let event = unsafe {
-                        &*(item.as_ptr() as *const ProcessEvent)
+                    let event = unsafe { 
+                        &*(item.as_ptr() as *const ProcessEvent) 
                     };
-
+                    
                     let comm = String::from_utf8_lossy(&event.comm)
                         .trim_end_matches('\0');
-
-                    println!("🎯 Process Event: PID={} PPID={} CMD={} TIME={}",
-                        event.pid,
-                        event.ppid,
-                        comm,
+                    
+                    println!("🎯 Process Event: PID={} PPID={} CMD={} TIME={}", 
+                        event.pid, 
+                        event.ppid, 
+                        comm, 
                         event.timestamp
                     );
                 }
-
+                
                 // Small delay to prevent busy waiting
                 time::sleep(time::Duration::from_millis(10)).await;
             } => {}

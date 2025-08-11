@@ -3,6 +3,9 @@ name = "lepus-elite"
 version = "0.1.0"
 edition = "2024"
 
+[workspace]
+members = [".", "xtask"]
+
 [[bin]]
 name = "lepus"
 path = "src/main.rs"
@@ -23,5 +26,6 @@ serde_json = "1.0"
 env_logger = "0.10"
 log = "0.4"
 
-[build-dependencies]
-aya-tool = "0.1"
+# Error Handling
+anyhow = "1.0"
+
