@@ -1,6 +1,7 @@
 #include <linux/bpf.h>
 #include <linux/ptrace.h>
 #include <linux/types.h>
+#include <
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_tracing.h>
 
@@ -12,10 +13,10 @@ struct process_event {
     __u64 timestamp;
 };
 
-// Ring buffer map
+// Ring buffer map (used to send events to user-space)
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 256 * 1024);
+    __uint(max_entries, 256 * 1024); // 256 KB
 } EVENTS SEC(".maps");
 
 // Tracepoint for process execution
